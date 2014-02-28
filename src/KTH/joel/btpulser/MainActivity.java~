@@ -1,0 +1,193 @@
+package se.kth.joel.converter;
+
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+
+import javax.xml.parsers.SAXParser;
+import javax.xml.parsers.SAXParserFactory;
+
+import org.xml.sax.InputSource;
+import org.xml.sax.XMLReader;
+
+import android.app.Activity;
+import android.os.AsyncTask;
+import android.os.Bundle;
+import android.util.Log;
+import android.view.View;
+import android.view.View.OnClickListener;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.Spinner;
+import android.widget.TextView;
+import android.widget.Toast;
+
+/**
+ * A program which download currency data from Internet if older than 24 hour and import last downloaded data if not.
+ * When currency matrix is imported, you can convert from one currency unit amount to another.
+ * @author Joel Denke
+ *
+ */
+public class MainActivity extends Activity implements OnClickListener
+{
+    private Spinner fromSelector;
+    private Spinner toSelector;
+	private TextView response;
+	private EditText amountInput;
+	private Button convertButton;
+	
+	private ArrayAdapter<Item> spinnerAdapter;
+    private CurrencyData currencyData;
+	
+	// The url from where the data will be pulled.
+	public static final String xmlData = "http://www.ecb.europa.eu/stats/eurofxref/eurofxref-daily.xml";
+
+    @Override
+    public void onCreate(Bundle savedInstanceState)
+    {
+	    super.onCreate(savedInstanceState);
+        setTitle("Joels Currency Converter");
+	    
+	    // init the GUI
+	    setContentView(R.layout.activity_main);
+        fromSelector = (Spinner)findViewById(R.id.fromSelector);
+        toSelector = (Spinner)findViewById(R.id.toSelector);
+        amountInput = (EditText)findViewById(R.id.amount);
+        response = (TextView)findViewById(R.id.result);
+	    convertButton = (Button)findViewById(R.id.convertButton);
+
+        // Initiate class which fetches data
+        currencyData = new CurrencyData(this);
+	    convertButton.setOnClickListener(this);
+    }
+    
+    @Override
+    public void onStart()
+    {
+    	super.onStart();
+        Date mod = currencyData.getLastDownloadDate();
+        long diff = 0;
+
+        if (mod != null) {
+            diff = new Date().getTime() - mod.getTime();
+            flashMessage(String.format("Time difference is: %d\n", TimeUnit.MILLISECONDS.toHours(diff)));
+        }
+
+        if (mod == null || TimeUnit.MILLISECONDS.toHours(diff) >= 24)
+        {
+            try {
+                currencyData.importData(new DownloadData().execute(xmlData).get());
+                currencyData.writeBuffer();
+            } catch (InterruptedException e) {
+                flashMessage("Download process was interrupted\n");
+                Log.e("Error: ", e.getMessage());
+            } catch (ExecutionException e) {
+                flashMessage("Execution issues while trying to download data\n");
+                Log.e("Error: ", e.getMessage());
+            }
+        } else {
+            flashMessage("Offline data do not exist or is less than 24 hours, will try to read from file\n");
+            currencyData.readFileToBuffer();
+        }
+    }
+    
+    // Executed when press convert button
+    public void onClick(View v)
+    {
+		String inputValue = amountInput.getText().toString();
+        Item from = (Item) fromSelector.getSelectedItem();
+        Item to = (Item) toSelector.getSelectedItem();
+
+        if (from == null || to == null) {
+            response.setText("Need to select currencies from and to");
+        } else if (!inputValue.matches("") && Double.valueOf(inputValue) > 0.0) {
+            double result = convertRate(from, to);
+            String output = String.format("Conversion rate: %s %s = %d %s", inputValue, from.getCurrency(), result, to.getCurrency());
+	    	response.setText(output);
+		} else {
+			flashMessage("You need to enter an amount over zero");
+		}
+	}
+    
+    /**
+     * A helper method to calculate the new currencies
+     * @param a from currency
+     * @param b to currency
+     * @return result
+     */
+    private Double convertRate(Item a, Item b)
+    {
+    	String amount = amountInput.getText().toString();
+    	return (Double.valueOf(amount) * b.getRate()) / a.getRate();
+    }
+
+    public void flashMessage(String message)
+    {
+        Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+    }
+
+    /**
+     * An inner class for handling the network.
+     * A new thread will be started where all the network stuff happens.
+     */
+    private class DownloadData extends AsyncTask<String, Void, ArrayList<Item>> {
+
+    	private ArrayList<Item> items = new ArrayList<Item>();
+
+    	// show a message when the DownloadData is starting
+       	@Override
+    	protected void onPreExecute()
+        {
+    		super.onPreExecute();
+    		flashMessage("Started download process for latest currencies on the web");
+            setProgressBarVisibility(true);
+    	}
+
+       	// here is all the network logic, this is being done in a separate thread.
+    	@Override
+    	protected ArrayList<Item> doInBackground(String... url)
+        {
+    		try {
+    			// create a URL from the string
+				URL website = new URL(url[0]);
+				// defines a factory API that enables applications to configure and obtain a SAX based parser to parse XML documents.
+				SAXParserFactory spf = SAXParserFactory.newInstance();
+				// creates a new instance of a SAXParser.
+				SAXParser sp = spf.newSAXParser();
+				// returns the XMLReader.
+				XMLReader xr = sp.getXMLReader();
+				// creates an XML handler from the class XMLParser.
+				XMLParser xp = new XMLParser();
+				// allow an application to register a content event handler
+				xr.setContentHandler(xp);
+				// parse the URL with the help of XMLParser
+				xr.parse(new InputSource(website.openStream()));
+				// get the list of items from XMLParser
+				items = xp.getItems();
+			} catch (Exception e) {
+                flashMessage("Error while parsing xml data from the web");
+				Log.e("Error: ", e.getMessage());
+	        }
+			return items;
+    	}
+
+    	// update the UI when doInBackground() is done
+    	@Override
+    	protected void onPostExecute(ArrayList<Item> items)
+        {
+    		super.onPostExecute(items);
+            updateSpinners(items);
+    	}
+    }
+
+    public void updateSpinners(ArrayList<Item> items)
+    {
+        spinnerAdapter = new ArrayAdapter<Item>(MainActivity.this, android.R.layout.simple_spinner_item, items);
+        fromSelector.setAdapter(spinnerAdapter);
+        toSelector.setAdapter(spinnerAdapter);
+        flashMessage("Currency matrix successfully updated");
+    }
+}

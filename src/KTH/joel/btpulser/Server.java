@@ -3,6 +3,12 @@ package KTH.joel.btpulser;
 import java.io.*;
 import java.net.*;
 
+/**
+ * @description Run a simple server socket
+ *
+ * @author Borrowed from Anders Lindström at https://www.kth.se/social/upload/50ab584ff276540cb1eaa971/NoninServer.java
+ *
+ */
 public class Server
 {
     public static void main(String[] args) throws Exception
@@ -23,7 +29,7 @@ public class Server
                     System.out.println(socket.getInetAddress());
 
                     reader = new BufferedReader(new InputStreamReader(socket.getInputStream()));
-                    writer = new PrintWriter(new FileWriter("nonin.txt"));
+                    writer = new PrintWriter(new FileWriter("nonin.txt", false));
 
                     String line = reader.readLine();
                     while(line != null) {

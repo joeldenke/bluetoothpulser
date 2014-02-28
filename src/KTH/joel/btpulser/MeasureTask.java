@@ -5,6 +5,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.Calendar;
 import java.util.Timer;
 import java.util.UUID;
 
@@ -13,7 +14,12 @@ import android.bluetooth.BluetoothDevice;
 import android.bluetooth.BluetoothSocket;
 import android.os.AsyncTask;
 import android.os.Environment;
+import android.util.Log;
 
+/**
+ * @description AsyncTask to get measure data from Nonin device
+ * @author      Joel Denke, Mathias Westman
+ */
 public class MeasureTask extends AsyncTask<Void, String, String>
 {
     // The byte sequence to set sensor to a specific (and obsolete) format
@@ -34,7 +40,10 @@ public class MeasureTask extends AsyncTask<Void, String, String>
         this.adapter = BluetoothAdapter.getDefaultAdapter();
     }
 
-
+    /**
+     * @description Get file from SD card if availabe, else use internal storage.
+     * @author      Joel Denke, Mathias Westman
+     */
     public File getFileResource()
     {
         String path;
@@ -45,9 +54,21 @@ public class MeasureTask extends AsyncTask<Void, String, String>
             path = client.getFilesDir().getPath();
         }
 
-        return new File(path + '/' + client.getPreference(AVAILABLE_PREFERENCE.FILENAME));
+        File file = new File(path + '/' + client.getPreference(AVAILABLE_PREFERENCE.FILENAME));
+        if (file.exists())
+            file.delete();
+
+        try {
+            file.createNewFile();
+        } catch (IOException e) {}
+
+        return file;
     }
 
+    /**
+     * @description Retreive data over bluetooth, from Nonin in background
+     * @author      Joel Denke, Mathias Westman
+     */
     @Override
     protected String doInBackground(Void... params)
     {
@@ -72,24 +93,34 @@ public class MeasureTask extends AsyncTask<Void, String, String>
             is.read(status);
             long startTime = System.currentTimeMillis();
             long measureTime = Long.parseLong(client.getPreference(AVAILABLE_PREFERENCE.MEASURETIME));
+            double deltaT = 1.0/75.0;
 
             if (status[0] == ACK) {
+                writer.write(String.format("------------ Date: %s, Time frequency: %f -----------------\r\n",
+                        Calendar.getInstance().getTime().toString(), deltaT));
+
                 while (System.currentTimeMillis() - startTime < measureTime && run) {
-                    // read 5 byte
                     byte[] frame = new byte[5];
                     is.read(frame);
-                    // Convert raw byte data to java int
-                    int value = unsignedByteToInt(frame[2]);
-                    result = String.format("PLETH DATA: %d \r\n", value);
-                    publishProgress(result);
 
+                    int pleth = unsignedByteToInt(frame[2]);
+                    result = String.format("%d\r\n", pleth);
                     writer.write(result);
                     writer.flush();
+                    client.publishPleth(pleth, deltaT);
+
+                    if ((frame[1] & 1) != 0) { // Check LSB (on status SYNC) and make sure we have first frame
+                        int pulseMSB = (frame[3] >>> 16) * 128; // Get PR (Pulse rate) MSB as an int
+                        is.read(frame);
+                        int pulse = unsignedByteToInt(frame[3]) + pulseMSB;
+                        publishProgress(String.format("%d", pulse));
+                    }
                 }
             }
 
             is.close();
         } catch (Exception e) {
+            Log.d("bluetooth", e.toString());
             publishProgress("Lost connection");
         } finally {
             try {
@@ -103,6 +134,10 @@ public class MeasureTask extends AsyncTask<Void, String, String>
         return result;
     }
 
+    /**
+     * @description Cancel the task
+     * @author      Joel Denke, Mathias Westman
+     */
     @Override
     protected void onCancelled()
     {
@@ -110,6 +145,10 @@ public class MeasureTask extends AsyncTask<Void, String, String>
         run = false;
     }
 
+    /**
+     * @description When we publish new progress
+     * @author      Joel Denke, Mathias Westman
+     */
     @Override
     protected void onProgressUpdate(String... result)
     {
@@ -117,16 +156,20 @@ public class MeasureTask extends AsyncTask<Void, String, String>
         client.setResponse(result[0]);
     }
 
+    /**
+     * @description Executes when background task is complete
+     * @author      Joel Denke, Mathias Westman
+     */
     @Override
-    protected void onPostExecute(String result) {
+    protected void onPostExecute(String result)
+    {
         super.onPostExecute(result);
-
+        client.setResponse("Measuring has ended");
     }
 
     /**
-     * Convert unsigned byte to int
-     * @param b
-     * @return
+     * @description Convert unsigned byte to int
+     * @author      Joel Denke, Mathias Westman
      */
     private int unsignedByteToInt(byte b)
     {

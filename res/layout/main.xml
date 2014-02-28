@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout  xmlns:android="http://schemas.android.com/apk/res/android"
+               xmlns:tools="http://schemas.android.com/tools"
+               android:orientation="vertical"
+               android:layout_width="fill_parent"
+               android:layout_height="fill_parent"
+               android:padding="10dp"
+               android:id="@+id/context">
+
+    <Button
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:text="Start Measure"
+            android:id="@+id/startMeasure"/>
+
+    <Button
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:text="Stop Measure"
+            android:id="@+id/stopMeasure"/>
+
+    <Button
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:text="Clear chart"
+            android:id="@+id/clearChart"/>
+
+    <LinearLayout  xmlns:android="http://schemas.android.com/apk/res/android"
+                   android:layout_width="wrap_content"
+                   android:layout_height="wrap_content"
+                   android:padding="10dp"
+                   android:id="@+id/chart" />
+
+    <TextView
+            android:id="@+id/textUserSettings"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:padding="10dp"
+     />
+
+    <Button
+            android:layout_width="fill_parent"
+            android:layout_height="wrap_content"
+            android:text="Send to server"
+            android:id="@+id/sendData"/>
+</LinearLayout>

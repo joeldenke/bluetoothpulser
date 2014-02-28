@@ -8,7 +8,6 @@ import android.app.Activity;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.graphics.Color;
-import android.os.AsyncTask;
 import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.provider.Settings;
@@ -16,18 +15,14 @@ import android.util.Log;
 import android.view.*;
 import android.widget.*;
 
-import java.io.DataOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.net.Socket;
 import java.util.Set;
 
-/**
- * @description Main activity, handling convert currencies
- * @author Joel Denke
- *
- */
+import org.achartengine.ChartFactory;
+import org.achartengine.GraphicalView;
+import org.achartengine.model.XYMultipleSeriesDataset;
+import org.achartengine.model.XYSeries;
+import org.achartengine.renderer.XYMultipleSeriesRenderer;
+import org.achartengine.renderer.XYSeriesRenderer;
 
 enum AVAILABLE_PREFERENCE
 {
@@ -39,6 +34,11 @@ enum TASKS
     SEND, RECEIVE
 }
 
+/**
+ * @description Main activity, the bluetooth client
+ * @author Joel Denke, Mathias Westman
+ *
+ */
 public class BTClient extends Activity  implements View.OnClickListener
 {
     private static final int RESULT_SETTINGS = 10;
@@ -52,15 +52,65 @@ public class BTClient extends Activity  implements View.OnClickListener
 
     private TextView textView;
 
+    private GraphicalView mChart;
+    private XYMultipleSeriesDataset mDataset = new XYMultipleSeriesDataset();
+    private XYMultipleSeriesRenderer mRenderer = new XYMultipleSeriesRenderer();
+    private XYSeries pulseSeries;
+    private XYSeriesRenderer mpulseRenderer;
+
+    private double currentX = 0;
+
+    /**
+     * @description Initiates the graph chart
+     *
+     * @author Joel Denke, Mathias Westman
+     *
+     */
+    private void initChart()
+    {
+        pulseSeries = new XYSeries("Pulse");
+        mDataset.addSeries(pulseSeries);
+        mpulseRenderer = new XYSeriesRenderer();
+        mpulseRenderer.setColor(Color.GREEN);
+        mRenderer.addSeriesRenderer(mpulseRenderer);
+        mRenderer.setBackgroundColor(Color.BLACK);
+        mRenderer.setApplyBackgroundColor(true);
+    }
+
+    /**
+     * @description Publish a new pleth (blood flow) value and view on graph
+     *
+     * @author Joel Denke, Mathias Westman
+     *
+     */
+    public void publishPleth(int data, double deltaT)
+    {
+        pulseSeries.add(currentX, data);
+        currentX += deltaT;
+        mChart.repaint();
+    }
+
+    /**
+     * @description Create UI and init bluetooth
+     *
+     * @author Joel Denke, Mathias Westman
+     *
+     */
     @Override
     public void onCreate(Bundle savedInstanceState)
     {
 	    super.onCreate(savedInstanceState);
         initUI();
         btAdapter = BluetoothAdapter.getDefaultAdapter();
-        //initBluetooth();
+        initBluetooth();
     }
 
+    /**
+     * @description Initiate asynchronous background task.
+     *
+     * @author Joel Denke, Mathias Westman
+     *
+     */
     public void startTask(TASKS type)
     {
         switch (type) {
@@ -77,6 +127,12 @@ public class BTClient extends Activity  implements View.OnClickListener
         }
     }
 
+    /**
+     * @description Get evailable shared preferenc
+     *
+     * @author Joel Denke, Mathias Westman
+     *
+     */
     public synchronized String getPreference(AVAILABLE_PREFERENCE pref)
     {
         SharedPreferences sharedPrefs = PreferenceManager.getDefaultSharedPreferences(this);
@@ -102,7 +158,7 @@ public class BTClient extends Activity  implements View.OnClickListener
 
     /**
      * @description view message on the screen
-     * @author Joel Denke
+     * @author Joel Denke, Mathias Westman
      *
      */
     public synchronized void viewMessage(String message, boolean flash)
@@ -112,11 +168,23 @@ public class BTClient extends Activity  implements View.OnClickListener
             Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
     }
 
+    /**
+     * @description Set response to text field
+     *
+     * @author Joel Denke, Mathias Westman
+     *
+     */
     public synchronized void setResponse(String response)
     {
         textView.setText(response);
     }
 
+    /**
+     * @description Try to initiate bluetooth
+     *
+     * @author Joel Denke, Mathias Westman
+     *
+     */
     private void initBluetooth()
     {
         if (btAdapter == null) {
@@ -133,6 +201,12 @@ public class BTClient extends Activity  implements View.OnClickListener
         }
     }
 
+    /**
+     * @description Fetch first available Nonon Bluetooth device, if any paired yet
+     *
+     * @author Joel Denke, Mathias Westman
+     *
+     */
     private void getBTDevice()
     {
         btDevice = null;
@@ -158,7 +232,7 @@ public class BTClient extends Activity  implements View.OnClickListener
 
     /**
      * @description Initiaties GUI components
-     * @author Joel Denke
+     * @author Joel Denke, Mathias Westman
      *
      */
     private void initUI()
@@ -178,12 +252,19 @@ public class BTClient extends Activity  implements View.OnClickListener
         Button stopMeasure = (Button)findViewById(R.id.stopMeasure);
         stopMeasure.setOnClickListener(this);
 
+        Button clearChart = (Button)findViewById(R.id.clearChart);
+        clearChart.setOnClickListener(this);
+
         Button sendData = (Button)findViewById(R.id.sendData);
         sendData.setOnClickListener(this);
-
-        initGameBoard();
     }
 
+    /**
+     * @description Handle button click events
+     *
+     * @author Joel Denke, Mathias Westman
+     *
+     */
     @Override
     public void onClick(View v)
     {
@@ -193,49 +274,25 @@ public class BTClient extends Activity  implements View.OnClickListener
                     viewMessage("Starting measure task ...", true);
                     startTask(TASKS.RECEIVE);
                 } else {
-                    viewMessage("No device connected", true);
+                    initBluetooth();
                 }
                 break;
             case R.id.stopMeasure:
                 viewMessage(".. stops measuring", true);
                 if (receiveTask != null) receiveTask.cancel(true);
                 break;
+            case R.id.clearChart:
+                clearChart();
+                break;
             case R.id.sendData:
-                viewMessage("Start sending data to server...", true);
                 startTask(TASKS.SEND);
                 break;
         }
     }
 
     /**
-     * @description Initiaties the game board
-     * @author Joel Denke
-     *
-     */
-    private void initGameBoard()
-    {   /*
-        ViewGroup.LayoutParams params = surface.getLayoutParams();
-        WindowManager wm = (WindowManager) this.getSystemService(Context.WINDOW_SERVICE);
-        Display display = wm.getDefaultDisplay();
-        Point size = new Point();
-        display.getSize(size);
-        Point p = new Point();
-
-        if (size.y > size.x) {
-            p.x = size.x - 50;
-            p.y = (int)(size.y*0.7);
-        } else {
-            p.x = size.x - 50;
-            p.y = (int)(size.y*0.5);
-        }
-
-        params.width = p.x;
-        params.height = p.y;*/
-    }
-
-    /**
      * @description When preference activity is finished
-     * @author Joel Denke
+     * @author Joel Denke, Mathias Westman
      *
      */
     @Override
@@ -264,7 +321,7 @@ public class BTClient extends Activity  implements View.OnClickListener
 
     /**
      * @description Create menu from xml
-     * @author Joel Denke
+     * @author Joel Denke, Mathias Westman
      *
      */
     @Override
@@ -276,7 +333,7 @@ public class BTClient extends Activity  implements View.OnClickListener
 
     /**
      * @description Menu actions
-     * @author Joel Denke
+     * @author Joel Denke, Mathias Westman
      *
      */
     @Override
@@ -293,17 +350,55 @@ public class BTClient extends Activity  implements View.OnClickListener
     }
 
     /**
-     * @description Overrides the start method, when app is resuming.
-     *              Reload settings and init game board if not onCreate is called before
+     * @description Clear everything in the chart
      *
-     * @author Joel Denke
+     * @author Joel Denke, Mathias Westman
+     *
+     */
+    public void clearChart()
+    {
+        pulseSeries.clear();
+        mChart.repaint();
+    }
+
+    /**
+     * @description Setup the layout of the chart
+     *
+     * @author Joel Denke, Mathias Westman
+     *
+     */
+    private void setupChartSize()
+    {
+        LinearLayout surface = (LinearLayout)findViewById(R.id.chart);
+        surface.setBackgroundColor(Color.BLACK);
+        ViewGroup.LayoutParams params = surface.getLayoutParams();
+
+        params.width = 500;
+        params.height = 300;
+    }
+
+    /**
+     * @description Initializes chart on resume
+     *
+     * @author Joel Denke, Mathias Westman
      *
      */
     @Override
-    public void onStart()
+    public void onResume()
     {
         Log.i("SaveActivity", "onStart called");
-    	super.onStart();
+    	super.onResume();
+
+        setupChartSize();
+
+        LinearLayout layout = (LinearLayout) findViewById(R.id.chart);
+        if (mChart == null) {
+            initChart();
+            mChart = ChartFactory.getCubeLineChartView(this, mDataset, mRenderer, 0.3f);
+            layout.addView(mChart);
+        } else {
+            mChart.repaint();
+        }
     }
 
     /**
@@ -315,7 +410,7 @@ public class BTClient extends Activity  implements View.OnClickListener
     public void onConfigurationChanged(Configuration newConfig)
     {
         super.onConfigurationChanged(newConfig);
-        viewMessage(getString(R.string.changedLang) + ": " + newConfig.locale.getLanguage(), true);
+        //viewMessage(getString(R.string.changedLang) + ": " + newConfig.locale.getLanguage(), true);
 
         getBaseContext().getResources().updateConfiguration(newConfig, getBaseContext().getResources().getDisplayMetrics());
         initUI();

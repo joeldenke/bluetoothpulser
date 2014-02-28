@@ -7,6 +7,10 @@ import java.io.*;
 import java.net.InetAddress;
 import java.net.Socket;
 
+/**
+ * @description Async task to send data from file to a server over TCP socket
+ * @author      Joel Denke, Mathias Westman
+ */
 public class SendToServerTask extends AsyncTask<Void, String, String>
 {
     private BTClient client;
@@ -18,6 +22,10 @@ public class SendToServerTask extends AsyncTask<Void, String, String>
         this.client = client;
     }
 
+    /**
+     * @description Get file from SD card if availabe, else use internal storage.
+     * @author      Joel Denke, Mathias Westman
+     */
     public File getFileResource()
     {
         String path;
@@ -31,6 +39,10 @@ public class SendToServerTask extends AsyncTask<Void, String, String>
         return new File(path + '/' + client.getPreference(AVAILABLE_PREFERENCE.FILENAME));
     }
 
+    /**
+     * @description Send data to server with TCP socket, in background
+     * @author      Joel Denke, Mathias Westman
+     */
     @Override
     protected String doInBackground(Void... params)
     {
@@ -49,6 +61,9 @@ public class SendToServerTask extends AsyncTask<Void, String, String>
 
         try {
             socket = new Socket(InetAddress.getByName(serverIP), serverPort);
+
+            publishProgress("Start sending data to server...");
+
             dataOs = new DataOutputStream(socket.getOutputStream());
             dataOs.write(data, 0, data.length);
             dataOs.flush();
@@ -65,11 +80,10 @@ public class SendToServerTask extends AsyncTask<Void, String, String>
         return result;
     }
 
-    @Override
-    protected void onCancelled() {
-        super.onCancelled();
-    }
-
+    /**
+     * @description When new progress is made, set response
+     * @author      Joel Denke, Mathias Westman
+     */
     @Override
     protected void onProgressUpdate(String... result) {
         super.onProgressUpdate(result);
@@ -77,6 +91,10 @@ public class SendToServerTask extends AsyncTask<Void, String, String>
         client.setResponse(result[0]);
     }
 
+    /**
+     * @description Set end result after background task is executed
+     * @author      Joel Denke, Mathias Westman
+     */
     @Override
     protected void onPostExecute(String result) {
         super.onPostExecute(result);

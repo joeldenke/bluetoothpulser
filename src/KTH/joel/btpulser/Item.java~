@@ -1,0 +1,48 @@
+package com.example.currency.currenyConverter;
+
+/**
+ * A class connecting currency and
+ * rate togheter for easier use in application.
+ * @author Mats Maatson & Fredrik Lindstein
+ *
+ */
+public class Item {
+
+	String currency;
+	Double rate;
+	
+	public Item() {
+		// TODO Auto-generated constructor stub
+	}
+	
+	/**
+	 * Creates an item containing currency and rate.
+	 * @param currency
+	 * @param rate
+	 */
+	public Item(String currency, Double rate) {
+		this.currency = currency;
+		this.rate = rate;
+	}
+	
+	public String getCurrency() {
+		return currency;
+	}
+	
+	public Double getRate() {
+		return rate;
+	}
+	
+	public void setCurrency(String c) {
+		currency = c;
+	}
+	
+	public void setRate(Double r) {
+		rate = r;
+	}
+	
+	@Override
+	public String toString() {
+		return this.currency + " (" + this.rate + " " + this.currency + " is 1 EUR)";
+	}
+}

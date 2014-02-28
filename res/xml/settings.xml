@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android">
+    <PreferenceCategory android:title="@string/pref_storage" >
+        <EditTextPreference android:key="prefFilename"
+                            android:title="@string/pref_filename" />
+    </PreferenceCategory>
+    <PreferenceCategory android:title="@string/pref_server" >
+        <EditTextPreference android:key="prefServerIp"
+                            android:title="@string/pref_server_ip" />
+        <EditTextPreference android:key="prefServerPort"
+                            android:title="@string/pref_server_port" />
+    </PreferenceCategory>
+    <PreferenceCategory android:title="@string/pref_measurement" >
+        <ListPreference
+                android:key="prefMeasureTime"
+                android:entries="@array/measuretime_labels"
+                android:entryValues="@array/measuretime_values"
+                android:summary="@string/pref_measurement_time_summary"
+                android:title="@string/pref_measurement_time"
+                />
+    </PreferenceCategory>
+</PreferenceScreen>
